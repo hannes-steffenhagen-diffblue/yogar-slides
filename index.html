@@ -149,9 +149,11 @@
         </section>
         <section>
           <h3> EOG inference rules </h3>
-          <li>Transitivity (if $e_1\prec_{\pi}e_2$ and $e_2\prec_{\pi}e_3$ then $e_1\prec{\pi}e_3$)</li>
+	  <ul>
+          <li>Transitivity (if $e_1\prec_{\pi}e_2$ and $e_2\prec_{\pi}e_3$ then $e_1\prec_{\pi}e_3$)</li>
           <li>SC: if $e_2$ reads from $e_1$, $e_3$ writes to the variable $e_2$ reads, and $e_3$ happens before $e_2$ it must also happen before $e_1$</li>
           <li>SC: if $e_2$ reads from $e_1$, and $e_3$ writes the variable $e_2$ reads, and $e_3$ happens after $e_1$ it must also happen after $e_2$</li>
+	  </ul>
         </section>
         <section>
           <h3> We do find a counterexample $\pi$</h3>

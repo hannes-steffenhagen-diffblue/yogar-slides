@@ -4,14 +4,24 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
+    <style>
+     .threads {
+         display: flex;
+         flex-direction: row;
+         width: 100%;
+     }
+     .threads > div {
+         flex-grow: 1;
+     }
+    </style>
 		<title>reveal.js</title>
 
 		<link rel="stylesheet" href="css/reset.css">
 		<link rel="stylesheet" href="css/reveal.css">
-		<link rel="stylesheet" href="css/theme/black.css">
+		<link rel="stylesheet" href="css/theme/solarized.css">
 
 		<!-- Theme used for syntax highlighting of code -->
-		<link rel="stylesheet" href="lib/css/monokai.css">
+		<link rel="stylesheet" href="lib/css/solarized-light.css">
 
 		<!-- Printing and PDF exports -->
 		<script>
@@ -25,8 +35,137 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+        <section>
+          <h1> Yogar CBMC </h1>
+        </section>
+        <section>
+          <h2> Concurrency in general and in CBMC </h2>
+        </section>
+        <section>
+          <h3> Orders </h3>
+          <ul>
+            <li class="fragment">Program Order (PO) - events within a single thread are ordered like you think they should be (mostly the responsibility of compilers to ensure this)</li>
+            <li class="fragment"> Sequentially Consistent (SC) - there is a total order of all events</li>
+            <li class="fragment">Total Store Order (TSO) - if a store from a thread is visible, then all preceding stores from that thread are visible as well (this is the model most mainstream CPUs implement)</li>
+            <li class="fragment">Partial Store Order (PSO) - stores/loads may be reordered (apparently ARM do this?)</li>
+          </ul>
+        </section>
+				<section>
+          <h3>What are the possible values of a and b?</h3>
+          <pre><code data-trim class="language-c">
+          // initialisation
+          int x = 0, y = 0;
+          </code></pre>
+          <div class="threads">
+            <div>
+              <pre><code data-trim class="language-c">
+              // thread 1
+              x = 1;
+              y = 1;
+              </code></pre>
+            </div>
+            <div>
+              <pre><code data-trim class="language-c">
+              // thread 2
+              int a = y;
+              int b = x;
+              assert(a <= b);
+              </code></pre>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h3>What outputs can we see?</h3>
+          <pre><code data-trim class="language-c">
+          // initialisation
+          int x = 0, y = 0;
+          </code></pre>
+          <div class="threads">
+            <div>
+              <pre><code data-trim class="language-c">
+              // thread 1
+              y = 1;
+              printf("%d\n", x);
+              </code></pre>
+            </div>
+            <div>
+              <pre><code data-trim class="language-c">
+              // thread 2
+              x = 1;
+              printf("%d\n", y);
+              </code></pre>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h3>Concurrency in CBMC</h3>
+          <p>Basically, just do regular single threaded symex but:</p>
+        </section>
+        <section>
+          <h3> Extra steps </h3>
+          <ul>
+            <li class="fragment"> When seeing start_thread, add a new thread to symex</li>
+            <li class="fragment"> Each variable that is accessed in more than one thread is treated as shared variable</li>
+            <li class="fragment"> Each read/write of shared variable is event with its own ID </li>
+            <li class="fragment"> Add constraints encoding “read from this variable will get value from a write to same variable”</li>
+            <li class="fragment"> Add constraints encoding what read/write pairs are possible (e.g. “cannot read from write that hasn’t happened yet”)</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Fancy Formula</h3>
+          $$ \alpha := \phi_{init}\wedge\rho\wedge\zeta\wedge\xi $$
+          <ul>
+            <li>$\phi_{init}$ is initialisations</li>
+            <li>$\rho$ are the regular symex-y things (guards, local read/writes and what nots)</li>
+            <li>$\zeta$ the possible read/write links</li>
+            <li>$\xi$ the constraints encoding which read/write links can actually happen</li>
+          </ul>
+        </section>
+        <section>
+          <h3> YOGAR Idea in a nutshell</h3>
+          Check
+          $$ \varphi_i := \phi_{init}\wedge\rho\wedge\zeta\wedge\xi_i $$
+          with
+          $$ \xi_0 = \text{true} $$
+          instead.
+          (Note: YOGAR assumes SC, I don’t think approach readily generalises to other models)
+        </section>
+        <section>
+          <h3> YOGAR Idea in a nutshell</h3>
+          Basically, we now have an abstraction of the clock constraints (starting with no constraints at all).
+          If we find no counterexamples in the abstraction, we won’t find any with additional constraints either.
+          If we do find a counterexample, it needs to be checked.
+        </section>
+        <section>
+          <h3> Counterexample validation </h3>
+          <ul>
+            <li class="fragment"> We’ll call the counterexample $\pi$</li>
+            <li class="fragment"> Counter example trace gives us ordering of events $\prec_{\pi}$ </li>
+            <li class="fragment"> We have program order observable from reading the trace </li>
+            <li class="fragment"> We have order of events given by read/write links (remember we assume SC) </li>
+            <li class="fragment"> From these + some inference rules to deduce implicit orderings of related events
+              we get an event order graph (EOG) </li>
+          </ul>
+        </section>
+        <section>
+          <h3> EOG inference rules </h3>
+          <li>Transitivity (if $e_1\prec_{\pi}e_2$ and $e_2\prec_{\pi}e_3$ then $e_1\prec{\pi}e_3$)</li>
+          <li>SC: if $e_2$ reads from $e_1$, $e_3$ writes to the variable $e_2$ reads, and $e_3$ happens before $e_2$ it must also happen before $e_1$</li>
+          <li>SC: if $e_2$ reads from $e_1$, and $e_3$ writes the variable $e_2$ reads, and $e_3$ happens after $e_1$ it must also happen after $e_2$</li>
+        </section>
+        <section>
+          <h3> We do find a counterexample $\pi$</h3>
+          Case 1: EOG contains cycles (i.e. there is an event $e$ with induced order $e\prec_{\pi}e$). This means it is invalid (remember, SC).
+          Find reasons for those cycles using graph algorithm, add them
+          (negated) as constraints to $\xi_{i+1}$.
+        </section>
+        <section>
+          <h3> We do fine a counterexample $\pi$</h3>
+          Case 2: EOG doesn’t contain cycles. We don’t know if the counterexample is valid still.
+          Add whole counterexample (true guard literals, true read-from literals) to original formula.
+          If it is still satisfiable, it’s a real counterexample. If not, get unsatisfiable core (i.e.
+          parts that make the formula unsatisfiable) and add their negation to $\xi_{i+1}$.
+        </section>
 			</div>
 		</div>
 
@@ -42,7 +181,8 @@
 					{ src: 'plugin/markdown/marked.js' },
 					{ src: 'plugin/markdown/markdown.js' },
 					{ src: 'plugin/highlight/highlight.js' },
-					{ src: 'plugin/notes/notes.js', async: true }
+					{ src: 'plugin/notes/notes.js', async: true },
+          { src: 'plugin/math/math.js', async: true }
 				]
 			});
 		</script>
